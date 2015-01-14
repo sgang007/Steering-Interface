@@ -1,36 +1,73 @@
 #include <steer_pub.h>
-#include <std_msgs/Float.h>
-#define SER_PORT "/dev/ttyACM0"
-#define BAUD_RATE 115200
+
+//#include <std_msgs/Float.h>
+#define SER_PORT "/dev/serial/by-id/usb-Arduino__www.arduino.cc__0043_95335343136351612280-if00"
+#define BAUD_RATE 9600
 #define BUFFER_SIZE 11
 #define BUS_ID 301
 #define TIMEOUT 10
-
+#define TIMESTEP 10.0/1000.0 //duration between messages in seconds
 using namespace std;
 
+inline void error(char* msg)
+{
+    fprintf(stderr, "%s\n",msg);
+    exit(EXIT_FAILURE);
+}
 steering_encoder::steering_encoder()
 {
-	angle=0.0;
-	angle_change=0.0;
-	time_step=10.0;
+	packet=new char[256];	
+	serialConnection=new serial_lib();
+	if (serialConnection->isInitialized())
+		serialConnection->serialport_close();
+	serialConnection->serialport_init(SER_PORT,BAUD_RATE);
+
+    if(!serialConnection->isInitialized())
+    	error((char *)"Couldn't open port");
+#ifdef STEERING_DEBUG    
+	 printf("Opened port %s\n",SER_PORT);
+#endif
+    serialConnection->serialport_flush();
 }
+
 float handwheel_to_steering(bool radians=false)
 {
 	//mapping between steering and handwheel after profiling system
 }
-bool steering_encoder::crc_valid(char *packet)
+bool steering_encoder::crc_check()
 {
-
+	int length=packet[0];
+	char new_pac[length-2]; //the last two bytes are crc bytes
+	//shifting data to left by 1
+	for(int i=0;i<length-2;i++)
+		new_pac[i]=packet[i+1];
+	return crc_valid(hextoi(packet[length],packet[length-1]),new_pac,length-2);
 }
-bool steering_encoder::read_packet(char *packet)
+void steering_encoder::read_packet()
 {
-	serial_lib s(SER_PORT);
-	if (s.serialport_init(BAUD_RATE))
+	char eolchar='\n';
+	int timeout=5000;
+	const int buf_max = 256;
+	char buf[buf_max];   
+
+	if( !serialConnection->isInitialized())
 	{
-		if(s.serialport_read_until(packet,'\n',BUFFER_SIZE,TIMEOUT)==0)
-			return true;
+		error((char *)"serial port not opened");
+	
 	}
-	return false;
+    memset(buf,0,buf_max);  //sets packet to 256 0s
+    serialConnection->serialport_read_until( buf, eolchar, buf_max, timeout);
+#ifdef STEERING_DEBUG
+    printf("\nReceived string: %s",buf);
+#endif
+    for (int i=0;i<buf_max;i++)
+    {
+    	if (buf[1]!=0)
+    		packet[i]=buf[i];
+    	else
+    		break;
+    }	
+    
 }
 
 int hextoi(char hb,char lb)
@@ -42,17 +79,15 @@ int hextoi(char hb,char lb)
 }
 
 
-void steering_encoder::get_steer_values(char *packet)
+void steering_encoder::get_steer_values(float &angle,float &angle_vel)
 {
-
+	 angle=(((float)hextoi(packet[2],packet[1])*359.912)/4095.0);
+	 angle_vel=(((float)hextoi(packet[2],packet[1])*359.912)/4095.0)/TIMESTEP;
+#ifdef STEERING_DEBUG
+	 printf("\nSteering angle:%f\n",angle);
+#endif
 }
 
-void* steering_encoder::generate_message()
-{
-	//create object of msg type;
-	//populate the message;
-	//return pointer to object
-}
 
 /*
  * Interface: CAN 2.0 B

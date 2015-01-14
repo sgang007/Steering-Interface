@@ -4,32 +4,39 @@
 // 2006-2013, Tod E. Kurt, http://todbot.com/blog/
 //
 
-#include "serial_lib.h"
-#define SERIALPORTDEBUG 
+#include <serial_lib.h>
 
+#include <stdio.h>    // Standard input/output definitions 
+#include <unistd.h>   // UNIX standard function definitions 
+#include <fcntl.h>    // File control definitions 
+#include <errno.h>    // Error number definitions 
+#include <termios.h>  // POSIX terminal control definitions 
+#include <string.h>   // String function definitions 
+#include <sys/ioctl.h>
 
-serial_lib::serial_lib(const char* serialport)
-{      
-    //fd = open(serialport, O_RDWR | O_NOCTTY | O_NDELAY);
-    fd = open(serialport, O_RDWR | O_NONBLOCK ); 
-    if (fd == -1)  {
-        perror("serialport_init: Unable to open port ");        
-    }
-    else
-    	serialport_flush();
-    
-}
-
+// uncomment this to debug reads
+//#define SERIALPORTDEBUG 
 
 // takes the string name of the serial port (e.g. "/dev/tty.usbserial","COM1")
 // and a baud rate (bps) and connects to that port at that speed and 8N1.
 // opens the port in fully raw mode so you can send binary data.
 // returns valid fd, or -1 on error
-bool serial_lib::serialport_init(int baud)
+serial_lib::serial_lib()
 {
-    struct termios toptions;    
+	fd =-1;
+}
+int serial_lib::serialport_init(const char* serialport, int baud)
+{
+    struct termios toptions;
+
     
+    //fd = open(serialport, O_RDWR | O_NOCTTY | O_NDELAY);
+    fd = open(serialport, O_RDWR | O_NONBLOCK );
     
+    if (fd == -1)  {
+        perror("serialport_init: Unable to open port ");
+        return -1;
+    }
     
     //int iflags = TIOCM_DTR;
     //ioctl(fd, TIOCMBIS, &iflags);     // turn on DTR
@@ -37,7 +44,7 @@ bool serial_lib::serialport_init(int baud)
 
     if (tcgetattr(fd, &toptions) < 0) {
         perror("serialport_init: Couldn't get term attributes");
-        return false;
+        return -1;
     }
     speed_t brate = baud; // let you override switch below if needed
     switch(baud) {
@@ -81,20 +88,19 @@ bool serial_lib::serialport_init(int baud)
     tcsetattr(fd, TCSANOW, &toptions);
     if( tcsetattr(fd, TCSAFLUSH, &toptions) < 0) {
         perror("init_serialport: Couldn't set term attributes");
-        return false;
+        return -1;
     }
 
-    return true;
 }
 
 //
-int serial_lib::serialport_close()
+int serial_lib::serialport_close(  )
 {
     return close( fd );
 }
 
 //
-int serial_lib::serialport_writebyte(uint8_t b)
+int serial_lib::serialport_writebyte(  uint8_t b)
 {
     int n = write(fd,&b,1);
     if( n!=1)
@@ -103,7 +109,7 @@ int serial_lib::serialport_writebyte(uint8_t b)
 }
 
 //
-int serial_lib::serialport_write(const char* str)
+int serial_lib::serialport_write( const char* str)
 {
     int len = strlen(str);
     int n = write(fd, str, len);
@@ -115,7 +121,7 @@ int serial_lib::serialport_write(const char* str)
 }
 
 //
-int serial_lib::serialport_read_until(char* buf, char until, int buf_max, int timeout)
+int serial_lib::serialport_read_until( char* buf, char until, int buf_max, int timeout)
 {
     char b[1];  // read expects an array, so we give it a 1-byte array
     int i=0;
@@ -137,7 +143,11 @@ int serial_lib::serialport_read_until(char* buf, char until, int buf_max, int ti
     buf[i] = 0;  // null terminate the string
     return 0;
 }
-
+bool serial_lib::isInitialized() 
+{
+	if(fd==-1)return false;
+	else return true;
+}
 //
 int serial_lib::serialport_flush()
 {
