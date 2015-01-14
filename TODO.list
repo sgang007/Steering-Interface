@@ -1,0 +1,13 @@
+Packet received format:
+[packet_length, angle_lb, angle_hb, count, angle_change_lb, angle_change_hb, status,crc_lb, crc_hb]
+
+the packet_length has been added by me through arduino to help in crc calculations
+
+Get the CRC Validity check working:
+	Tried different CRC libraries but generated CRC and received CRC is different
+
+Get the relation between handwheel and steering:
+	Function is defined in steer_encoder.cpp
+
+Compile generated object .o files to shared objects:
+	Try dynamically loading the libraries instead of multi-file compilation
